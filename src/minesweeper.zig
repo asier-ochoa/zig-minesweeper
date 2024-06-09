@@ -66,6 +66,12 @@ pub const Board = struct {
             } else |_| {}
         }
     }
+
+    // Currently a stub
+    pub fn countAdjacentMines(self: Self, pos: u32) u8 {
+        _ = self; _ = pos;
+        return 0;
+    }
 };
 
 test "Initialization" {

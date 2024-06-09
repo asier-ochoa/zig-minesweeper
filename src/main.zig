@@ -11,6 +11,8 @@ const CursesError = error{
     Return,
 };
 
+// Creates static cchar_t objects
+// Lazyly added at call-site
 fn cchar_tOf(comptime symbol: comptime_int) CursesError!curses.cchar_t {
     const static = struct {
         const s = symbol;
@@ -42,6 +44,9 @@ const drawing = struct {
     const tr_corner = '┐';
     const bl_corner = '└';
     const br_corner = '┘';
+    const undiscovered = '■';
+    const discovered = [_]u8{' ', '1', '2', '3', '4', '5', '6', '7', '8'};
+    const flagged = '□';
 };
 
 inline fn between(a: anytype, val: anytype, b: anytype) bool {
@@ -61,6 +66,24 @@ pub fn drawBox(x: i32, y: i32, width: u32, height: u32) !void{
     _ = curses.mvadd_wch(y, x + iwidth - 1, &(try cchar_tOf(drawing.tr_corner)));
     _ = curses.mvadd_wch(y + iheight - 1, x, &(try cchar_tOf(drawing.bl_corner)));
     _ = curses.mvadd_wch(y + iheight - 1, x + iwidth - 1, &(try cchar_tOf(drawing.br_corner)));
+}
+
+pub fn drawBoard(board: minesweeper.Board, x: i32, y: i32) void {
+    for (board.minefield, 0..) |cell, i| {
+        const ii: i32 = @intCast(i);
+        _ = curses.mvadd_wch(
+            y + @divTrunc(ii, board.width),
+            x + @mod(ii, board.width),
+            switch (cell.state) {
+                .discovered => switch (board.countAdjacentMines(@intCast(i))) {
+                    inline 0...8 => |adj| &(cchar_tOf(drawing.discovered[adj]) catch unreachable),
+                    else => unreachable,
+                },
+                .flagged => &(cchar_tOf(drawing.flagged) catch unreachable),
+                .undiscovered => &(cchar_tOf(drawing.undiscovered) catch unreachable),
+            },
+        );
+    }
 }
 
 const GameState = struct {
@@ -87,7 +110,7 @@ pub fn main() !u8 {
         }
     };
     state.board.init();
-    state.board.generateMinefield(0.2);
+    state.board.generateMinefield(0.5);
 
     // Main loop
     while (true) {
@@ -100,7 +123,8 @@ pub fn main() !u8 {
             else => |val| {std.debug.print("Pressed key: {x}\n", .{val});},
         }
         _ = curses.erase();
-        try drawBox(state.x, state.y, 15, 10);
+        drawBoard(state.board, state.x, state.y);
+        // try drawBox(state.x, state.y, 15, 10);
         _ = curses.refresh();
     }
     return 0;
