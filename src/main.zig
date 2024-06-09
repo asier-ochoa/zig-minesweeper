@@ -1,4 +1,5 @@
 const std = @import("std");
+const minesweeper = @import("minesweeper.zig");
 const curses = @cImport({
     // @cDefine("NCURSES_WIDECHAR", "1");
     @cInclude("curses.h");
@@ -63,8 +64,9 @@ pub fn drawBox(x: i32, y: i32, width: u32, height: u32) !void{
 }
 
 const GameState = struct {
-    x: i32 = 0,
-    y: i32 = 0,
+    board: minesweeper.Board,
+    x: i32 = 4,
+    y: i32 = 4,
 };
 
 pub fn main() !u8 {
@@ -77,7 +79,15 @@ pub fn main() !u8 {
     // Activate arrow key support
     _ = curses.keypad(main_window, true);
 
-    var state = GameState{};
+    var rand = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+    var state = GameState{
+        .board = minesweeper.Board{
+            .height = 5, .width = 5,
+            .rand = rand.random(),
+        }
+    };
+    state.board.init();
+    state.board.generateMinefield(0.2);
 
     // Main loop
     while (true) {
