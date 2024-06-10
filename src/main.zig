@@ -1,7 +1,6 @@
 const std = @import("std");
 const minesweeper = @import("minesweeper.zig");
 const curses = @cImport({
-    // @cDefine("NCURSES_WIDECHAR", "1");
     @cInclude("curses.h");
 });
 const signal = @cImport(@cInclude("signal.h"));
@@ -44,8 +43,9 @@ const drawing = struct {
     const tr_corner = '┐';
     const bl_corner = '└';
     const br_corner = '┘';
+    const mine = '*';
     const undiscovered = '■';
-    const discovered = [_]u8{' ', '1', '2', '3', '4', '5', '6', '7', '8'};
+    const discovered = [_]u8{'_', '1', '2', '3', '4', '5', '6', '7', '8'};
     const flagged = '□';
 };
 
@@ -75,7 +75,8 @@ pub fn drawBoard(board: minesweeper.Board, x: i32, y: i32) void {
             y + @divTrunc(ii, board.width),
             x + @mod(ii, board.width),
             switch (cell.state) {
-                .discovered => switch (board.countAdjacentMines(@intCast(i))) {
+                .discovered => if (cell.has_mine) &(cchar_tOf(drawing.mine) catch unreachable)
+                else switch (board.countAdjacentMines(@intCast(i))) {
                     inline 0...8 => |adj| &(cchar_tOf(drawing.discovered[adj]) catch unreachable),
                     else => unreachable,
                 },
@@ -105,14 +106,16 @@ pub fn main() !u8 {
     var rand = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var state = GameState{
         .board = minesweeper.Board{
-            .height = 5, .width = 5,
+            .height = 16, .width = 16,
             .rand = rand.random(),
         }
     };
     state.board.init();
-    state.board.generateMinefield(0.5);
+    state.board.generateMinefield(0.1);
 
     // Main loop
+    drawBoard(state.board, 1, 1);
+    _ = curses.move(state.y, state.x);
     while (true) {
         switch (curses.getch()) {
             'q' => return 0,
@@ -123,8 +126,8 @@ pub fn main() !u8 {
             else => |val| {std.debug.print("Pressed key: {x}\n", .{val});},
         }
         _ = curses.erase();
-        drawBoard(state.board, state.x, state.y);
-        // try drawBox(state.x, state.y, 15, 10);
+        drawBoard(state.board, 1, 1);
+        _ = curses.move(state.y, state.x);
         _ = curses.refresh();
     }
     return 0;

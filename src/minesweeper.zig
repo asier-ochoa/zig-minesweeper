@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const Cell = struct {
     const State = enum {
@@ -23,8 +24,8 @@ pub const Board = struct {
     const Self = @This();
     const max_size = 256;
 
-    width: u8,
-    height: u8,
+    width: u16,
+    height: u16,
     rand: std.rand.Random,
     minefield: []Cell = undefined,
 
@@ -67,23 +68,95 @@ pub const Board = struct {
         }
     }
 
+    fn safeGet(self: Self, pos: i32) ?*const Cell {
+        return if (pos < 0 or pos >= self.width * self.height)
+            null
+        else
+            @constCast(&self.minefield[@intCast(pos)]);
+    }
+
     // Currently a stub
-    pub fn countAdjacentMines(self: Self, pos: u32) u8 {
-        _ = self; _ = pos;
-        return 0;
+    pub fn countAdjacentMines(self: Self, pos: i32) u8 {
+        const w = self.width;
+        const adjacent = [_]?*const Cell{
+            self.safeGet(pos - w - 1), self.safeGet(pos - w), self.safeGet(pos - w + 1),
+            self.safeGet(pos - 1)    , null                 , self.safeGet(pos + 1),
+            self.safeGet(pos + w - 1), self.safeGet(pos + w), self.safeGet(pos + w + 1),
+        };
+        if (builtin.is_test) {
+            std.debug.print("Adjacent mines:\n{any}\n", .{adjacent});
+        }
+        var count: u8 = 0;
+        for (adjacent, 0..) |cell, idx| {
+            if (idx != 4){
+                if (cell) |c| {
+                    count += if (c.has_mine) 1 else 0;
+                }
+            }
+        }
+        return count;
     }
 };
 
+fn getTestingRand() std.rand.Random {
+    const static = struct {
+        var testing_rand: std.rand.DefaultPrng = undefined;
+        var initialized = false;
+    };
+    if (static.initialized) {
+        return static.testing_rand.random();
+    } else {
+        static.testing_rand = std.rand.DefaultPrng.init(0);
+        static.initialized = true;
+        return static.testing_rand.random();
+    }
+}
+
+inline fn emptyCell() Cell {
+    return .{
+        .state = .undiscovered,
+        .has_mine = false,
+    };
+}
+
+inline fn mineCell() Cell {
+    return .{
+        .state = .undiscovered,
+        .has_mine = true,
+    };
+}
+
 test "Initialization" {
-    var board = Board{.width = 10, .height = 10};
-    try board.init();
+    var board = Board{.width = 10, .height = 10, .rand = getTestingRand()};
+    board.init();
     const test_data = &[_]Cell{Cell{.state = .undiscovered, .has_mine = false}} ** 100;
 
     try std.testing.expectEqual(board.minefield.len, test_data.len);
     for (0..board.minefield.len) |i| {
-        try std.testing.expect(std.meta.eql(
+        std.testing.expect(std.meta.eql(
             board.minefield[i],
             test_data[i],
-        ));
+        )) catch |err| {
+            std.debug.print("Failed board:\n{any}\n", .{test_data});
+            return err;
+        };
     }
+}
+
+test "Mine Adjacency" {
+    var test_data = [_]Cell{
+        emptyCell(), emptyCell(), emptyCell(), emptyCell(), emptyCell(),
+        emptyCell(), emptyCell(), mineCell(), emptyCell(), mineCell(),
+        mineCell(), emptyCell(), emptyCell(), mineCell(), emptyCell(),
+        emptyCell(), mineCell(), mineCell(), mineCell(), emptyCell(),
+        mineCell(), emptyCell(), mineCell(), mineCell(), emptyCell(),
+    };
+
+    var board = Board{.width = 5, .height = 5, .rand = getTestingRand()};
+    board.minefield = &test_data;
+    
+    std.testing.expectEqual(5, board.countAdjacentMines(12)) catch |err| {
+        std.debug.print("Failed board:\n{any}\n", .{test_data});
+        return err;
+    };
 }
