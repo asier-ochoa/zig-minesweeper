@@ -68,14 +68,46 @@ pub const Board = struct {
         }
     }
 
-    fn safeGet(self: Self, pos: i32) ?*const Cell {
-        return if (pos < 0 or pos >= self.width * self.height)
-            null
-        else
-            @constCast(&self.minefield[@intCast(pos)]);
+    pub fn discoverCell(self: *Self, pos: i32) void {
+        std.debug.assert(pos >= 0 and pos < self.minefield.len);
+        self.discoverFloodFill(pos);
     }
 
-    // Currently a stub
+    fn discoverFloodFill(self: Self, pos: i32) void {
+        // std.debug.print("Trying x:{} y:{}\n", .{@mod(pos, self.width), @divTrunc(pos, self.width)});
+        if (self.safeGetMut(@intCast(pos))) |cell| {
+            if (cell.state != .discovered) {
+                cell.state = .discovered;
+            } else {
+                return;
+            }
+        } else {
+            return;
+        }
+        if (self.countAdjacentMines(@intCast(pos)) == 0) {
+            const iwidth: i16 = @intCast(self.width);
+            // Up
+            self.discoverFloodFill(pos - iwidth);
+            // Down
+            self.discoverFloodFill(pos + iwidth);
+            // Left
+            self.discoverFloodFill(pos - 1);
+            // Right
+            self.discoverFloodFill(pos + 1);
+        }
+    }
+
+    fn safeGet(self: Self, pos: i32) ?*const Cell {
+        return @constCast(self.safeGetMut(pos));
+    }
+
+    fn safeGetMut(self: Self, pos: i32) ?* Cell {
+        return if (pos < 0 or pos >= self.minefield.len)
+            null
+        else
+            &self.minefield[@intCast(pos)];
+    }
+
     pub fn countAdjacentMines(self: Self, pos: i32) u8 {
         const w = self.width;
         const adjacent = [_]?*const Cell{

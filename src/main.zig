@@ -11,7 +11,7 @@ const CursesError = error{
 };
 
 // Creates static cchar_t objects
-// Lazyly added at call-site
+// Lazily added at call-site
 fn cchar_tOf(comptime symbol: comptime_int) CursesError!curses.cchar_t {
     const static = struct {
         const s = symbol;
@@ -45,7 +45,7 @@ const drawing = struct {
     const br_corner = '┘';
     const mine = '*';
     const undiscovered = '■';
-    const discovered = [_]u8{'_', '1', '2', '3', '4', '5', '6', '7', '8'};
+    const discovered = [_]u8{' ', '1', '2', '3', '4', '5', '6', '7', '8'};
     const flagged = '□';
 };
 
@@ -89,9 +89,20 @@ pub fn drawBoard(board: minesweeper.Board, x: i32, y: i32) void {
 
 const GameState = struct {
     board: minesweeper.Board,
-    x: i32 = 4,
-    y: i32 = 4,
+    board_origin_x: i32 = 1,
+    board_origin_y: i32 = 1,
+    cursor_x: i32 = 0,
+    cursor_y: i32 = 0,
 };
+
+fn draw(state: GameState) !void {
+    _ = curses.erase();
+    defer _ = curses.refresh();
+
+    try drawBox(0, 0, state.board.width + 2, state.board.height + 2);
+    drawBoard(state.board, 1, 1);
+    _ = curses.move(state.cursor_y, state.cursor_x);
+}
 
 pub fn main() !u8 {
     // Need for unicode support
@@ -114,21 +125,24 @@ pub fn main() !u8 {
     state.board.generateMinefield(0.1);
 
     // Main loop
-    drawBoard(state.board, 1, 1);
-    _ = curses.move(state.y, state.x);
+    try draw(state);
     while (true) {
         switch (curses.getch()) {
             'q' => return 0,
-            curses.KEY_UP => {state.y -= 1;},
-            curses.KEY_DOWN => {state.y += 1;},
-            curses.KEY_LEFT => {state.x -= 1;},
-            curses.KEY_RIGHT => {state.x += 1;},
+            curses.KEY_UP => {state.cursor_y -= 1;},
+            curses.KEY_DOWN => {state.cursor_y += 1;},
+            curses.KEY_LEFT => {state.cursor_x -= 1;},
+            curses.KEY_RIGHT => {state.cursor_x += 1;},
+            ' ' => {
+                state.board.discoverCell(
+                    (state.cursor_y - state.board_origin_y) *
+                    state.board.width +
+                    (state.cursor_x - state.board_origin_y)
+                );
+            },
             else => |val| {std.debug.print("Pressed key: {x}\n", .{val});},
         }
-        _ = curses.erase();
-        drawBoard(state.board, 1, 1);
-        _ = curses.move(state.y, state.x);
-        _ = curses.refresh();
+        try draw(state);
     }
     return 0;
 }
