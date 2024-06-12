@@ -22,7 +22,7 @@ const MinesweeperError = error {
 
 pub const Board = struct {
     const Self = @This();
-    const max_size = 256;
+    const max_size = 4096;
 
     width: u16,
     height: u16,
@@ -70,7 +70,19 @@ pub const Board = struct {
 
     pub fn discoverCell(self: *Self, pos: i32) void {
         std.debug.assert(pos >= 0 and pos < self.minefield.len);
-        self.discoverFloodFill(pos);
+        if (self.minefield[@intCast(pos)].state != .flagged) {
+            self.discoverFloodFill(pos);
+        }
+    }
+
+    pub fn flagCell(self: *Self, pos: i32) void {
+        std.debug.assert(pos >= 0 and pos < self.minefield.len);
+        const state = &self.minefield[@intCast(pos)].state;
+        switch (state.*) {
+            .undiscovered => |*s| {s.* = .flagged;},
+            .flagged => |*s| {s.* = .undiscovered;},
+            .discovered => {},
+        }
     }
 
     fn discoverFloodFill(self: Self, pos: i32) void {
@@ -84,6 +96,7 @@ pub const Board = struct {
         } else {
             return;
         }
+        // TODO: add 2d bounds check!!!!!! avoid leaking into other rows
         if (self.countAdjacentMines(@intCast(pos)) == 0) {
             const iwidth: i16 = @intCast(self.width);
             // Up
@@ -110,6 +123,7 @@ pub const Board = struct {
 
     pub fn countAdjacentMines(self: Self, pos: i32) u8 {
         const w = self.width;
+        // TODO: add 2d bounds check!!!!!! avoid leaking into other rows
         const adjacent = [_]?*const Cell{
             self.safeGet(pos - w - 1), self.safeGet(pos - w), self.safeGet(pos - w + 1),
             self.safeGet(pos - 1)    , null                 , self.safeGet(pos + 1),
@@ -119,11 +133,9 @@ pub const Board = struct {
             std.debug.print("Adjacent mines:\n{any}\n", .{adjacent});
         }
         var count: u8 = 0;
-        for (adjacent, 0..) |cell, idx| {
-            if (idx != 4){
-                if (cell) |c| {
-                    count += if (c.has_mine) 1 else 0;
-                }
+        for (adjacent) |cell| {
+            if (cell) |c| {
+                count += if (c.has_mine) 1 else 0;
             }
         }
         return count;

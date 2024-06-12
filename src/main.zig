@@ -5,6 +5,8 @@ const curses = @cImport({
 });
 const signal = @cImport(@cInclude("signal.h"));
 const locale = @cImport(@cInclude("locale.h"));
+const unistd = @cImport(@cInclude("unistd.h"));
+const ioctl = @cImport(@cInclude("sys/ioctl.h"));
 
 const CursesError = error{
     Return,
@@ -44,7 +46,7 @@ const drawing = struct {
     const bl_corner = '└';
     const br_corner = '┘';
     const mine = '*';
-    const undiscovered = '■';
+    const undiscovered = '█';
     const discovered = [_]u8{' ', '1', '2', '3', '4', '5', '6', '7', '8'};
     const flagged = '□';
 };
@@ -93,22 +95,64 @@ const GameState = struct {
     board_origin_y: i32 = 1,
     cursor_x: i32 = 0,
     cursor_y: i32 = 0,
+    main_window: *curses.struct__win_st = undefined,
+
+    var stateRef: *@This() = undefined;
+    fn externalGet() *@This() {
+        return @This().stateRef; 
+    }
 };
 
 fn draw(state: GameState) !void {
     _ = curses.erase();
     defer _ = curses.refresh();
 
-    try drawBox(0, 0, state.board.width + 2, state.board.height + 2);
-    drawBoard(state.board, 1, 1);
+    try drawBox(
+        state.board_origin_x - 1,
+        state.board_origin_y - 1,
+        state.board.width + 2,
+        state.board.height + 2,
+    );
+    drawBoard(state.board, state.board_origin_x, state.board_origin_y);
     _ = curses.move(state.cursor_y, state.cursor_x);
 }
 
+fn centerBoard(state: *GameState) void {
+    const old_cursor_diff_x = state.cursor_x - state.board_origin_x;
+    const old_cursor_diff_y = state.cursor_y - state.board_origin_y;
+
+    const max_x = curses.getmaxx(state.main_window);
+    const max_y = curses.getmaxy(state.main_window);
+    const corner_x = @divTrunc(max_x, 2) - @divTrunc(state.board.width, 2);
+    const corner_y = @divTrunc(max_y, 2) - @divTrunc(state.board.height, 2);
+    state.board_origin_x = corner_x;
+    state.board_origin_y = corner_y;
+
+    // Keep cursor relative to board
+    state.cursor_x = state.board_origin_x + old_cursor_diff_x;
+    state.cursor_y = state.board_origin_y + old_cursor_diff_y;
+}
+
+// Resize signal handler
+fn handleResizeSignal(_: c_int) callconv(.C) void {
+    const state = GameState.externalGet();
+
+    // Call ncurses's handler
+    var window_size = ioctl.winsize{};
+    _ = ioctl.ioctl(unistd.STDOUT_FILENO, ioctl.TIOCGWINSZ, &window_size);
+    _ = curses.resizeterm(window_size.ws_row, window_size.ws_col);
+
+    centerBoard(state);
+    draw(state.*) catch {};
+}
+
 pub fn main() !u8 {
-    // Need for unicode support
-    _ = locale.setlocale(locale.LC_ALL, "");
+    // Register signal handler for resize events
+    _ = signal.signal(signal.SIGWINCH, handleResizeSignal);
     const main_window = curses.initscr().?;
     defer _ = curses.endwin();
+    // Need for unicode support
+    _ = locale.setlocale(locale.LC_ALL, "");
     // Raw mode to instantly process characters
     _ = curses.raw();
     // Activate arrow key support
@@ -117,14 +161,17 @@ pub fn main() !u8 {
     var rand = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var state = GameState{
         .board = minesweeper.Board{
-            .height = 16, .width = 16,
+            .height = 16, .width = 32,
             .rand = rand.random(),
         }
     };
+    GameState.stateRef = &state;
+    state.main_window = main_window;
     state.board.init();
     state.board.generateMinefield(0.1);
 
     // Main loop
+    centerBoard(&state);
     try draw(state);
     while (true) {
         switch (curses.getch()) {
@@ -137,10 +184,15 @@ pub fn main() !u8 {
                 state.board.discoverCell(
                     (state.cursor_y - state.board_origin_y) *
                     state.board.width +
-                    (state.cursor_x - state.board_origin_y)
+                    (state.cursor_x - state.board_origin_x)
                 );
             },
-            else => |val| {std.debug.print("Pressed key: {x}\n", .{val});},
+            'f' => {state.board.flagCell(
+                (state.cursor_y - state.board_origin_y) *
+                state.board.width +
+                (state.cursor_x - state.board_origin_x)
+            );},
+            else => {},
         }
         try draw(state);
     }
