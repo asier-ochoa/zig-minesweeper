@@ -48,7 +48,7 @@ const drawing = struct {
     const mine = '*';
     const undiscovered = '█';
     const discovered = [_]u8{' ', '1', '2', '3', '4', '5', '6', '7', '8'};
-    const flagged = '□';
+    const flagged = '▒';
 };
 
 inline fn between(a: anytype, val: anytype, b: anytype) bool {
@@ -168,7 +168,7 @@ pub fn main() !u8 {
     GameState.stateRef = &state;
     state.main_window = main_window;
     state.board.init();
-    state.board.generateMinefield(0.1);
+    state.board.generateMinefield(0.15);
 
     // Main loop
     centerBoard(&state);

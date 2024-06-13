@@ -96,7 +96,6 @@ pub const Board = struct {
         } else {
             return;
         }
-        // TODO: add 2d bounds check!!!!!! avoid leaking into other rows
         if (self.countAdjacentMines(@intCast(pos)) == 0) {
             const iwidth: i16 = @intCast(self.width);
             // Up
@@ -104,9 +103,9 @@ pub const Board = struct {
             // Down
             self.discoverFloodFill(pos + iwidth);
             // Left
-            self.discoverFloodFill(pos - 1);
+            if (@mod(pos, iwidth) - 1 >= 0) self.discoverFloodFill(pos - 1);
             // Right
-            self.discoverFloodFill(pos + 1);
+            if (@mod(pos, iwidth) + 1 < iwidth) self.discoverFloodFill(pos + 1);
         }
     }
 
@@ -114,7 +113,14 @@ pub const Board = struct {
         return @constCast(self.safeGetMut(pos));
     }
 
-    fn safeGetMut(self: Self, pos: i32) ?* Cell {
+    fn safeGet2D(self: Self, x: i32, y: i32) ?*const Cell {
+        return if (x >= 0 and x < self.width and y >= 0 and y < self.height)
+            self.safeGet(y * self.width + x)
+        else
+            null;
+    }
+
+    fn safeGetMut(self: Self, pos: i32) ?*Cell {
         return if (pos < 0 or pos >= self.minefield.len)
             null
         else
@@ -122,12 +128,12 @@ pub const Board = struct {
     }
 
     pub fn countAdjacentMines(self: Self, pos: i32) u8 {
-        const w = self.width;
-        // TODO: add 2d bounds check!!!!!! avoid leaking into other rows
+        const x = @mod(pos, self.width);
+        const y = @divTrunc(pos, self.width);
         const adjacent = [_]?*const Cell{
-            self.safeGet(pos - w - 1), self.safeGet(pos - w), self.safeGet(pos - w + 1),
-            self.safeGet(pos - 1)    , null                 , self.safeGet(pos + 1),
-            self.safeGet(pos + w - 1), self.safeGet(pos + w), self.safeGet(pos + w + 1),
+            self.safeGet2D(x - 1, y - 1), self.safeGet2D(x, y - 1), self.safeGet2D(x + 1, y - 1),
+            self.safeGet2D(x - 1, y)    , null                         , self.safeGet2D(x + 1, y),
+            self.safeGet2D(x - 1, y + 1), self.safeGet2D(x, y + 1), self.safeGet2D(x + 1, y + 1),
         };
         if (builtin.is_test) {
             std.debug.print("Adjacent mines:\n{any}\n", .{adjacent});
@@ -190,16 +196,16 @@ test "Initialization" {
 test "Mine Adjacency" {
     var test_data = [_]Cell{
         emptyCell(), emptyCell(), emptyCell(), emptyCell(), emptyCell(),
-        emptyCell(), emptyCell(), mineCell(), emptyCell(), mineCell(),
-        mineCell(), emptyCell(), emptyCell(), mineCell(), emptyCell(),
-        emptyCell(), mineCell(), mineCell(), mineCell(), emptyCell(),
+        emptyCell(), emptyCell(), emptyCell(), emptyCell(), mineCell(),
+        mineCell(), emptyCell(), emptyCell(), emptyCell(), emptyCell(),
+        emptyCell(), mineCell(), emptyCell(), emptyCell(), emptyCell(),
         mineCell(), emptyCell(), mineCell(), mineCell(), emptyCell(),
     };
 
     var board = Board{.width = 5, .height = 5, .rand = getTestingRand()};
     board.minefield = &test_data;
     
-    std.testing.expectEqual(5, board.countAdjacentMines(12)) catch |err| {
+    std.testing.expectEqual(1, board.countAdjacentMines(12)) catch |err| {
         std.debug.print("Failed board:\n{any}\n", .{test_data});
         return err;
     };
