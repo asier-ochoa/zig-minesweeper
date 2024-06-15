@@ -70,7 +70,7 @@ pub fn drawBox(x: i32, y: i32, width: u32, height: u32) !void{
     _ = curses.mvadd_wch(y + iheight - 1, x + iwidth - 1, &(try cchar_tOf(drawing.br_corner)));
 }
 
-pub fn drawBoard(board: minesweeper.Board, x: i32, y: i32) void {
+fn drawBoard(board: minesweeper.Board, x: i32, y: i32) void {
     for (board.minefield, 0..) |cell, i| {
         const ii: i32 = @intCast(i);
         _ = curses.mvadd_wch(
@@ -89,6 +89,14 @@ pub fn drawBoard(board: minesweeper.Board, x: i32, y: i32) void {
     }
 }
 
+fn drawStatus(state: GameState) void {
+    _ = curses.mvaddstr(
+        state.board_origin_y + state.board.height + 1,
+        state.board_origin_x - 1,
+        state.status_text,
+    );
+}
+
 const GameState = struct {
     board: minesweeper.Board,
     board_origin_x: i32 = 1,
@@ -96,6 +104,8 @@ const GameState = struct {
     cursor_x: i32 = 0,
     cursor_y: i32 = 0,
     main_window: *curses.struct__win_st = undefined,
+    status_text: [:0]const u8 = "",
+    game_over: bool = false,
 
     var stateRef: *@This() = undefined;
     fn externalGet() *@This() {
@@ -114,6 +124,7 @@ fn draw(state: GameState) !void {
         state.board.height + 2,
     );
     drawBoard(state.board, state.board_origin_x, state.board_origin_y);
+    drawStatus(state);
     _ = curses.move(state.cursor_y, state.cursor_x);
 }
 
@@ -161,37 +172,52 @@ pub fn main() !u8 {
     var rand = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var state = GameState{
         .board = minesweeper.Board{
-            .height = 16, .width = 32,
+            .height = 8, .width = 16,
             .rand = rand.random(),
         }
     };
     GameState.stateRef = &state;
     state.main_window = main_window;
     state.board.init();
-    state.board.generateMinefield(0.15);
+    state.board.generateMinefield(0.1);
 
     // Main loop
     centerBoard(&state);
     try draw(state);
     while (true) {
-        switch (curses.getch()) {
-            'q' => return 0,
-            curses.KEY_UP => {state.cursor_y -= 1;},
-            curses.KEY_DOWN => {state.cursor_y += 1;},
-            curses.KEY_LEFT => {state.cursor_x -= 1;},
-            curses.KEY_RIGHT => {state.cursor_x += 1;},
-            ' ' => {
-                state.board.discoverCell(
+        const key = curses.getch();
+        if (!state.game_over) {
+            switch (key) {
+                'q' => return 0,
+                curses.KEY_UP => {state.cursor_y -= 1;},
+                curses.KEY_DOWN => {state.cursor_y += 1;},
+                curses.KEY_LEFT => {state.cursor_x -= 1;},
+                curses.KEY_RIGHT => {state.cursor_x += 1;},
+                ' ' => {
+                    state.board.discoverCell(
+                        (state.cursor_y - state.board_origin_y) *
+                        state.board.width +
+                        (state.cursor_x - state.board_origin_x)
+                    );
+                },
+                'f' => {state.board.flagCell(
                     (state.cursor_y - state.board_origin_y) *
                     state.board.width +
                     (state.cursor_x - state.board_origin_x)
-                );
+                );},
+                else => {},
+            }
+        } else if (key == 'q') {return 0;}
+        switch (state.board.checkCondition()) {
+            .win => {
+                state.game_over = true;
+                state.status_text = "You win!";
             },
-            'f' => {state.board.flagCell(
-                (state.cursor_y - state.board_origin_y) *
-                state.board.width +
-                (state.cursor_x - state.board_origin_x)
-            );},
+            .lose => {
+                state.game_over = true;
+                state.board.revealMines();
+                state.status_text = "You lose :(";
+            },
             else => {},
         }
         try draw(state);

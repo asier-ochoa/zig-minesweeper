@@ -16,6 +16,12 @@ const Cell = struct {
     }
 };
 
+const Condition = enum {
+    in_game,
+    win,
+    lose,
+};
+
 const MinesweeperError = error {
     MineAlreadyPresent,
 };
@@ -145,6 +151,29 @@ pub const Board = struct {
             }
         }
         return count;
+    }
+
+    pub fn checkCondition(self: Self) Condition {
+        var undiscovered_empty = false;
+        for (self.minefield) |cell| {
+            switch (cell.state) {
+                .discovered => {
+                    if (cell.has_mine) return .lose;
+                },
+                .undiscovered, .flagged => {
+                    if (!cell.has_mine) {
+                        undiscovered_empty = true;
+                    }
+                },
+            }
+        }
+        return if (undiscovered_empty) .in_game else .win;
+    }
+
+    pub fn revealMines(self: *Self) void {
+        for (self.minefield) |*cell| {
+            if (cell.has_mine) cell.state = .discovered;
+        }
     }
 };
 
