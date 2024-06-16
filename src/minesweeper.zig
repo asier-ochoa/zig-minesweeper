@@ -28,12 +28,13 @@ const MinesweeperError = error {
 
 pub const Board = struct {
     const Self = @This();
-    const max_size = 4096;
+    pub const max_size = 4096;
 
     width: u16,
     height: u16,
     rand: std.rand.Random,
     minefield: []Cell = undefined,
+    mines: i32 = undefined,
 
     // Initializes the board using a static array as cell storage
     // Each cell starts as undiscovered with no mine
@@ -64,6 +65,7 @@ pub const Board = struct {
         std.debug.assert(proportion < 1);
         const minefield_len: f32 = @floatFromInt(self.minefield.len);
         var remaining_mines: u32 = @intFromFloat(minefield_len * proportion);
+        self.mines = @intCast(remaining_mines);
 
         // Place mines until the amount computed with the proportion is 0
         while (remaining_mines != 0) {
@@ -174,6 +176,14 @@ pub const Board = struct {
         for (self.minefield) |*cell| {
             if (cell.has_mine) cell.state = .discovered;
         }
+    }
+
+    pub fn countMinesLeft(self: Self) u32 {
+        var result: u32 = @intCast(self.mines);
+        for (self.minefield) |cell| {
+            if (cell.state == .flagged) result -|= 1;
+        }
+        return result;
     }
 };
 

@@ -97,6 +97,14 @@ fn drawStatus(state: GameState) void {
     );
 }
 
+fn getMineCountStatus(state: GameState) [:0]const u8{
+    return switch (state.board.countMinesLeft()) {
+        inline 1 => "1 mine left",
+        inline 0, 2...minesweeper.Board.max_size => |val| std.fmt.comptimePrint("{} mines left", .{val}),
+        else => "? mines left",
+    };
+}
+
 const GameState = struct {
     board: minesweeper.Board,
     board_origin_x: i32 = 1,
@@ -172,7 +180,7 @@ pub fn main() !u8 {
     var rand = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var state = GameState{
         .board = minesweeper.Board{
-            .height = 8, .width = 16,
+            .height = 16, .width = 32,
             .rand = rand.random(),
         }
     };
@@ -218,7 +226,9 @@ pub fn main() !u8 {
                 state.board.revealMines();
                 state.status_text = "You lose :(";
             },
-            else => {},
+            .in_game => {
+                state.status_text = getMineCountStatus(state);
+            }
         }
         try draw(state);
     }
