@@ -114,6 +114,14 @@ pub const Board = struct {
             if (@mod(pos, iwidth) - 1 >= 0) self.discoverFloodFill(pos - 1);
             // Right
             if (@mod(pos, iwidth) + 1 < iwidth) self.discoverFloodFill(pos + 1);
+            // Top right
+            if (@mod(pos, iwidth) + 1 < iwidth) self.discoverFloodFill(pos + 1 - iwidth);
+            // Top left
+            if (@mod(pos, iwidth) - 1 >= 0) self.discoverFloodFill(pos - 1 - iwidth);
+            // Bottom left
+            if (@mod(pos, iwidth) - 1 >= 0) self.discoverFloodFill(pos - 1 + iwidth);
+            // Bottom right
+            if (@mod(pos, iwidth) + 1 < iwidth) self.discoverFloodFill(pos + 1 + iwidth);
         }
     }
 

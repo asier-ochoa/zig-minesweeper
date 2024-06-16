@@ -191,6 +191,7 @@ pub fn main() !u8 {
 
     // Main loop
     centerBoard(&state);
+    state.status_text = getMineCountStatus(state);
     try draw(state);
     while (true) {
         const rel_cursor_x = state.cursor_x - state.board_origin_x;
