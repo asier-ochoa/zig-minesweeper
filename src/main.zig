@@ -193,6 +193,8 @@ pub fn main() !u8 {
     centerBoard(&state);
     try draw(state);
     while (true) {
+        const rel_cursor_x = state.cursor_x - state.board_origin_x;
+        const rel_cursor_y = state.cursor_y - state.board_origin_y;
         const key = curses.getch();
         if (!state.game_over) {
             switch (key) {
@@ -202,17 +204,21 @@ pub fn main() !u8 {
                 curses.KEY_LEFT => {state.cursor_x -= 1;},
                 curses.KEY_RIGHT => {state.cursor_x += 1;},
                 ' ' => {
-                    state.board.discoverCell(
-                        (state.cursor_y - state.board_origin_y) *
-                        state.board.width +
-                        (state.cursor_x - state.board_origin_x)
-                    );
+                    if (
+                        rel_cursor_x >= 0 and rel_cursor_x < state.board.width
+                        and rel_cursor_y >= 0 and rel_cursor_y < state.board.height
+                    ) {
+                        state.board.discoverCell(rel_cursor_y * state.board.width + rel_cursor_x);
+                    }
                 },
-                'f' => {state.board.flagCell(
-                    (state.cursor_y - state.board_origin_y) *
-                    state.board.width +
-                    (state.cursor_x - state.board_origin_x)
-                );},
+                'f' => {
+                    if (
+                        rel_cursor_x >= 0 and rel_cursor_x < state.board.width
+                        and rel_cursor_y >= 0 and rel_cursor_y < state.board.height
+                    ) {
+                        state.board.flagCell(rel_cursor_y * state.board.width + rel_cursor_x);
+                    }
+                },
                 else => {},
             }
         } else if (key == 'q') {return 0;}
