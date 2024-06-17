@@ -1,8 +1,7 @@
 const std = @import("std");
 const minesweeper = @import("minesweeper.zig");
-const curses = @cImport({
-    @cInclude("curses.h");
-});
+
+const curses = @cImport(@cInclude("curses.h"));
 const signal = @cImport(@cInclude("signal.h"));
 const locale = @cImport(@cInclude("locale.h"));
 const unistd = @cImport(@cInclude("unistd.h"));
@@ -165,29 +164,61 @@ fn handleResizeSignal(_: c_int) callconv(.C) void {
     draw(state.*) catch {};
 }
 
+const mainMenuReturn = struct {
+    width: u16,
+    height: u16,
+    mine_density: f32,
+    exit: bool = false,
+};
+
+fn mainMenu() mainMenuReturn {
+    _ = curses.mvaddstr(0, 0, "Welcome to minesweeper!");
+    _ = curses.mvaddstr(1, 0, "Controls: SPACE to discover cell, F to flag cell, Q to quit");
+
+    _ = curses.mvaddstr(3, 0, "Choose your difficulty:");
+    _ = curses.mvaddstr(4, 4, "1. Easy");
+    _ = curses.mvaddstr(5, 4, "2. Medium");
+    _ = curses.mvaddstr(6, 4, "3. Hard");
+
+    while (true) {
+        switch (curses.getch()) {
+            '1' => return .{.width = 9, .height = 9, .mine_density = 0.1111},
+            '2' => return .{.width = 16, .height = 16, .mine_density = 0.15625},
+            '3' => return .{.width = 30, .height = 16, .mine_density = 0.20625},
+            'q' => return .{.width = 0, .height = 0, .mine_density = 0, .exit = true},
+            else => {},
+        }
+    }
+}
+
 pub fn main() !u8 {
-    // Register signal handler for resize events
-    _ = signal.signal(signal.SIGWINCH, handleResizeSignal);
     const main_window = curses.initscr().?;
     defer _ = curses.endwin();
     // Need for unicode support
     _ = locale.setlocale(locale.LC_ALL, "");
     // Raw mode to instantly process characters
     _ = curses.raw();
+    _ = curses.noecho();
     // Activate arrow key support
     _ = curses.keypad(main_window, true);
+
+    const ret = mainMenu();
+    if (ret.exit) return 0;
+    // Register signal handler for resize events
+    _ = signal.signal(signal.SIGWINCH, handleResizeSignal);
 
     var rand = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
     var state = GameState{
         .board = minesweeper.Board{
-            .height = 16, .width = 32,
+            .height = ret.height, .width = ret.width,
             .rand = rand.random(),
         }
     };
     GameState.stateRef = &state;
     state.main_window = main_window;
     state.board.init();
-    state.board.generateMinefield(0.1);
+    state.board.generateMinefield(ret.mine_density);
+
 
     // Main loop
     centerBoard(&state);
